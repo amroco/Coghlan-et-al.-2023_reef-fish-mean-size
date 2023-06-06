@@ -1,0 +1,1310 @@
+---
+title: "Mean Size Temperature"
+author: "Amy Rose Coghlan"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+
+#Libraries
+```{r}
+library(tidyverse)
+library(fishualize)
+library(mgcv)
+library(effects)
+library(ggeffects)
+library(lme4)
+library(lmerTest)
+library(nlme)
+library(merTools)
+library(interactions)
+library(gamm4)
+library(ggpubr)
+library(sjPlot)
+library(MuMIn)
+options(na.action=na.fail)
+library(glmmTMB)
+library(emmeans)
+
+
+
+
+
+```
+
+
+
+# Q1. How does mean body size change with temperature?
+
+##Community-level
+```{r setup, include=FALSE}
+
+
+load("transect_dat.Rdata")
+load("transect_notfished.Rdata")
+load("transect_nochond.Rdata")
+load("transect_chond.Rdata") 
+load("transect_dat_small.Rdata") 
+
+# TRANSECT LEVEL 'COMMUNITY' DATA
+head(transect_dat)
+sum(transect_dat$Tot_N)
+names(transect_dat)
+# body size, left skewed (all positive, is not normal, and is not count)
+hist(transect_dat$mean_sizeclass)
+hist(log(transect_dat$mean_sizeclass))
+summary(transect_dat$mean_sizeclass)
+summary(transect_dat$mean_sst_ann)
+
+
+sum(transect_dat$Tot_N)
+
+# Check mean_sizeclass
+transect_dat$year = as.factor(transect_dat$year)
+
+lme1 = lmer(log(mean_sizeclass)~
+                            mean_sst_ann + 
+                            (1|Grid_ID) + 
+                            (1|year),
+                         data = transect_dat)
+
+summary(lme1)
+tab_model(lme1)#provide this table
+tab_model(lme1, transform = "exp")#provide this table
+E <- resid(lme1)
+op <- par(mfrow = c(2, 2))
+ hist(E, xlab = "Residuals", main = "")
+ plot(transect_dat$mean_sst_ann, E, xlab = "Temp",
+ylab = "Residuals")
+ plot(transect_dat$year, E, xlab = "Year",
+ylab = "Residuals")
+ par(op)
+
+ 
+ plot(residuals(lme1))
+ 
+
+# meanvar.plot(transect_dat) 
+
+# Model is nearly unid if there are many entries with many similar entries make it hard for the model
+# par(mfrow =c(4,4))
+# plot(lme1)
+
+citation()
+citation("nlme")
+
+library(gridExtra)
+library(lattice)
+grid.arrange(
+  plot(lme1,resid(.) ~ fitted(.)),
+  qqmath(resid(lme1)),
+  qqmath(ranef(lme1))[[1]],
+  ncol=2)
+qqmath(ranef(lme1))
+
+
+summary(lme1)
+tab_model(lme1)
+tab_model(lme1, transform = "exp", file = 'lme1.doc')
+
+temp = c(14,29)
+
+# mean_size = 3.508067 --0.053792*temp
+# mean_size
+# exp(mean_size)
+
+mean_size = exp(3.508067 -0.053792*temp)
+mean_size
+
+weight = 0.01*mean_size^3
+weight
+
+# e^(a-b)
+exp(3.508067 -0.05)
+
+#  plot
+plot(allEffects(lme1))
+summary(transect_dat$mean_sst_ann)
+
+pred_plot = ggpredict(lme1, c("mean_sst_ann [13.5:29.5]"), type = "fe")
+glimpse(pred_plot)
+
+glimpse(transect_dat)
+transect_dat$dummy_factor = "whole_community"
+
+whole_comm = ggplot()+
+  geom_point(data=transect_dat, aes(x=mean_sst_ann, y=mean_sizeclass, alpha = 0.2, colour=dummy_factor))  +  
+    theme_classic() +
+  guides(alpha = "none") +
+    scale_colour_manual(values = c("#708090")) + #4682B4 #778899 #4682B4 #708090
+geom_ribbon(data=pred_plot,
+            aes(x=x,y=predicted , ymin=conf.low, ymax=conf.high),alpha=0.3) +
+geom_line(data=pred_plot,
+          aes(x=x, y=predicted), size = 1) +
+  theme(legend.position="none",legend.margin=margin(0,0,0,0),
+        legend.box.margin=margin(-10,-10,-10,-10), 
+        legend.title=element_text(size=12), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+      ylab("Mean community-level body size (cm)") +
+    xlab(expression("Mean SST " ( degree*C))) +
+  theme(strip.text.x = element_text(size = 12)) +
+  theme(strip.text.y = element_text(size = 12))
+whole_comm
+
+
+
+
+
+# SENSITIVITY TESTS: 
+
+# REMOVE FISH SPECIES TARGETED BY FISHERIES
+
+glimpse(transect_notfished)
+hist(log(transect_notfished$mean_sizeclass))
+
+lme_notfished = lmer(log(mean_sizeclass)~
+                            mean_sst_ann + 
+                            (1|Grid_ID) + 
+                            (1|year),
+                         data = transect_notfished)
+summary(lme_notfished)
+tab_model(lme_notfished)
+plot(allEffects(lme_notfished))
+
+
+#REMOVE SHARKS AND RAYS
+
+hist(log(transect_nochond$mean_sizeclass))
+
+lme_nochond = lmer(log(mean_sizeclass)~
+                            mean_sst_ann + 
+                            (1|Grid_ID) + 
+                            (1|year),
+                         data = transect_nochond)
+summary(lme_nochond)
+tab_model(lme_nochond)
+plot(allEffects(lme_nochond))
+
+# SHARKS AND RAYS ONLY
+
+hist(log(transect_chond$mean_sizeclass))
+
+lme_chond = lmer(log(mean_sizeclass)~
+                            mean_sst_ann + 
+                            (1|Grid_ID) + 
+                            (1|year),
+                         data = transect_chond)
+summary(lme_chond)
+tab_model(lme_chond)
+plot(allEffects(lme_chond))
+
+
+tab_model(lme1,
+         lme_notfished,
+         lme_nochond,
+         transform = "exp",
+         file = 'all_transect_models.doc')
+
+
+
+
+# SMALL FISH ONLY
+
+hist(log(transect_dat_small$mean_sizeclass))
+
+lme_small = lmer(log(mean_sizeclass)~
+                            mean_sst_ann + 
+                            (1|Grid_ID) + 
+                            (1|year),
+                         data = transect_dat_small)
+summary(lme_small)
+tab_model(lme_small)
+plot(allEffects(lme_small))
+
+tab_model(lme1,
+         lme_notfished,
+         lme_nochond,
+         lme_small)
+
+
+tab_model(lme1,
+         lme_notfished,
+         lme_nochond,
+         lme_small,
+         file = 'all_transect_models.doc')
+
+```
+
+
+
+
+
+
+
+
+
+
+##Guild-level
+
+```{R}
+load("transect_guild_dat.Rdata")
+load("transect_guild_chond.Rdata") 
+load("transect_guild_nochond.Rdata") 
+load("transect_guild_notfished.Rdata")
+
+
+
+# ------------------------------------------------------------------
+# GUILD LEVEL 
+
+glimpse(transect_guild_dat)
+
+unique(transect_guild_dat$trophic_guild)
+transect_herb_dat = transect_guild_dat %>% filter(trophic_guild == "Herbivore")
+hist(transect_herb_dat$mean_sizeclass )
+hist(log(transect_herb_dat$mean_sizeclass ))
+transect_inv_dat = transect_guild_dat %>% filter(trophic_guild == "Invertivore")
+hist(transect_inv_dat$mean_sizeclass )
+hist(log(transect_inv_dat$mean_sizeclass ))
+transect_plank_dat = transect_guild_dat %>% filter(trophic_guild == "Planktivore")
+hist(transect_plank_dat$mean_sizeclass )
+hist(log(transect_plank_dat$mean_sizeclass ))
+transect_pisc_dat = transect_guild_dat %>% filter(trophic_guild == "Piscivore")
+hist(transect_pisc_dat$mean_sizeclass )
+hist(log(transect_pisc_dat$mean_sizeclass ))
+
+
+# If modelling them all simultaneously
+# Nuisance
+# unload tidyverse and ggplot2 as an example first
+# detach("package:tidyverse", unload = TRUE)
+# detach("package:ggplot2", unload = TRUE)
+
+# magic option
+# options(tidyverse.quiet = TRUE)
+# library(tidyverse)
+
+nas = transect_guild_dat %>%
+  filter(is.na(trophic_guild)) 
+sum(nas$Tot_B)
+
+not_nas = transect_guild_dat %>%
+  filter(!is.na(trophic_guild)) 
+sum(not_nas$Tot_B)
+
+summary(not_nas$Tot_N)
+
+
+
+
+transect_guild_dat = transect_guild_dat %>% filter(!is.na(trophic_guild))
+hist(transect_guild_dat$mean_sizeclass)
+hist(log(transect_guild_dat$mean_sizeclass))
+summary(transect_guild_dat$mean_sst_ann)
+
+lme_g1 = lmer(log(mean_sizeclass)~
+                            mean_sst_ann * trophic_guild +
+                            (1|Grid_ID) +
+                            (1|year),
+                          # family=Gamma(link = "log"),
+                         data = transect_guild_dat)
+
+plot(lme_g1)
+qqnorm(residuals(lme_g1))
+qqline(residuals(lme_g1))
+
+
+plot_model(lme_g1, type='diag')
+
+
+emmeans(lme_g1, list(pairwise ~ trophic_guild), adjust = "tukey")
+
+# THIS DOESNT LOOK GREAT
+
+
+
+
+
+summary(lme_g1)
+tab_model(lme_g1)
+# tab_model(lme_g1, transform = "exp")
+tab_model(lme_g1,
+         # lme_notfished,
+         # lme_nochond,
+         # transform = "exp",
+         file = 'guild_model.doc')
+plot(allEffects(lme_g1))
+
+unique(transect_guild_dat$trophic_guild)
+
+
+pred_plot_guild_re = ggpredict(lme_g1 , c("mean_sst_ann [15,25]", "trophic_guild"), type = "re")
+glimpse(pred_plot_guild_re)
+
+
+
+# PLOT
+pred_plot_guild_re = ggpredict(lme_g1 , c("mean_sst_ann [13.5:29.5]", "trophic_guild"), type = "re")
+glimpse(pred_plot_guild_re)
+names(pred_plot_guild_re)
+names(pred_plot_guild_re) [6] = "trophic_guild"
+
+
+pred_plot_guild_fe = ggpredict(lme_g1 , c("mean_sst_ann [13.5:29.5]", "trophic_guild"), type = "fe")
+glimpse(pred_plot_guild_fe)
+names(pred_plot_guild_fe)
+names(pred_plot_guild_fe) [6] = "trophic_guild"
+
+guilds = ggplot()+
+  geom_point(data=transect_guild_dat, aes(x=mean_sst_ann, y=mean_sizeclass, alpha = 0.2, group = trophic_guild, colour=trophic_guild))  + 
+  theme_classic()+
+  guides(alpha = "none") +
+    facet_wrap(~trophic_guild, scales = "free_y") +
+geom_ribbon(data=pred_plot_guild_re,
+            aes(x=x,y=predicted, 
+                ymin=conf.low, 
+                ymax=conf.high),alpha=0.2) +
+  geom_ribbon(data=pred_plot_guild_fe,
+            aes(x=x,y=predicted, 
+                ymin=conf.low, 
+                ymax=conf.high),alpha=0.8, 
+                fill="white") +
+geom_line(data=pred_plot_guild_re,
+          aes(x=x, y=predicted), size = 1) +
+    scale_fill_manual(values=c("#0ADADA", "#568AE4","#26C6FF","#18D791")) +
+  theme(legend.position="none",legend.margin=margin(0,0,0,0),
+        legend.box.margin=margin(-10,-10,-10,-10),
+        legend.title=element_text(size=12),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+      ylab("Mean guild-level body size (cm)") +
+    xlab(expression("Mean SST " ( degree*C))) +
+  theme(strip.text.x = element_text(size = 12)) +
+  theme(strip.text.y = element_text(size = 12))
+guilds
+
+# glme1 = glmer(mean_sizeclass~
+#                             mean_sst_ann + 
+#                             (1|Grid_ID) +
+#                             (1+mean_sst_ann|ecoregion/year),
+#                           family=Gamma(link = "log"),
+#                          data = transect_dat)
+# summary(glme1); tab_model(glme1)
+
+
+# tab_model(lme_trns_sst_guild,transform = "exp", file = 'lme_trns_sst_guild.doc')
+# plot(allEffects(lme_trns_sst_guild)) #Takes ages
+
+
+
+
+
+
+
+
+# ------------------------------------------------------------------
+# SENSITIVITY TEST: GUILD NOT FISHED
+
+glimpse(transect_guild_notfished)
+
+transect_guild_notfished$latitude_1 = round(transect_guild_notfished$lat            , digits =  0)
+transect_guild_notfished$longitude_1 = round(transect_guild_notfished$long           , digits =  0)
+transect_guild_notfished$Grid_ID =  paste0(transect_guild_notfished$latitude_1," & ", transect_guild_notfished$longitude_1)
+
+colSums(is.na(transect_guild_notfished))
+transect_guild_notfished = transect_guild_notfished %>% filter(!is.na(trophic_guild))
+
+hist(log(transect_guild_notfished$mean_sizeclass))
+
+lme_notfished_g = lmer(log(mean_sizeclass)~
+                            mean_sst_ann * trophic_guild+ 
+                            (1|Grid_ID) + 
+                            (1|year),
+                         data = transect_guild_notfished)
+
+summary(lme_notfished_g)
+tab_model(lme_notfished_g)
+plot(allEffects(lme_notfished_g))
+
+
+
+
+# ------------------------------------------------------------------
+# SENSITIVITY TEST: No chond
+
+glimpse(transect_guild_notfished)
+
+transect_guild_nochond$latitude_1 = round(transect_guild_nochond$lat            , digits =  0)
+transect_guild_nochond$longitude_1 = round(transect_guild_nochond$long           , digits =  0)
+transect_guild_nochond$Grid_ID =  paste0(transect_guild_nochond$latitude_1," & ", transect_guild_nochond$longitude_1)
+
+colSums(is.na(transect_guild_nochond))
+transect_guild_nochond = transect_guild_nochond %>% filter(!is.na(trophic_guild))
+
+hist(log(transect_guild_nochond$mean_sizeclass))
+
+lme_nochond_g = lmer(log(mean_sizeclass)~
+                            mean_sst_ann * trophic_guild+ 
+                            (1|Grid_ID) + 
+                            (1|year),
+                         data = transect_guild_nochond)
+
+summary(lme_nochond_g)
+tab_model(lme_nochond_g)
+plot(allEffects(lme_nochond_g))
+
+
+
+#  Supp sensitivity tables
+
+tab_model(lme_g1,
+         lme_notfished_g,
+         lme_nochond_g)
+
+tab_model(lme_g1,
+         lme_notfished_g,
+         lme_nochond_g,
+         # transform = "exp",
+         file = 'all_transect_guild_models.doc')
+
+
+
+
+
+
+glimpse(transect_guild_chond)
+
+transect_guild_chond$latitude_1 = round(transect_guild_chond$lat            , digits =  0)
+transect_guild_chond$longitude_1 = round(transect_guild_chond$long           , digits =  0)
+transect_guild_chond$Grid_ID =  paste0(transect_guild_chond$latitude_1," & ", transect_guild_chond$longitude_1)
+transect_guild_chond = transect_guild_chond[!transect_guild_chond$trophic_guild %in% c("Planktivore"),]
+
+colSums(is.na(transect_guild_chond))
+transect_guild_chond = transect_guild_chond %>% filter(!is.na(trophic_guild))
+
+hist(log(transect_guild_chond$mean_sizeclass))
+
+lme_chond_g = lmer(log(mean_sizeclass)~
+                            mean_sst_ann * trophic_guild+ 
+                            (1|Grid_ID) + 
+                            (1|year),
+                         data = transect_guild_chond)
+
+summary(lme_chond_g)
+tab_model(lme_chond_g)
+plot(allEffects(lme_chond_g))
+
+```
+
+
+
+
+#Q2. How does community trophic guild composition change with temperature?
+#### Abundance
+```{r}
+
+
+library(dplyr)
+library(tidyverse)
+library(RColorBrewer)
+library(ggplot2)
+library(nnet)
+library("viridis") 
+
+
+
+load("transect_guild_dat.Rdata")
+glimpse(transect_guild_dat)
+
+# Proportion approach?
+# Is this a misleading approach? Each site had different numbers of fish, possibly due to site characteristics, but also conditions. So we want sites with more fish to have a higher weighting as larger sample sizes are probably more reliable. Just getting the proportion removes sample size from the question, and in some cases only one or two fish were seen, compared to tens or hundreds.
+
+
+
+# ------------------------------------------------------------------
+# Multinomial
+# Here we might be able to get around the fact that the surveys all have different numbers, because ideally the multinom will weight them accordingly.
+# We can fit a multinomial log-linear model with the multinom function from the nnet package. To regress composition against latitude.
+
+
+# ABUNDANCE
+#-------------------------------------------------------------------
+# This approach collects the data, grouping them by their survey, whereas the approach above just treats each piece of data as separate (I think)
+comp_transect_N = transect_guild_dat %>% 
+  subset(select = c(trophic_guild, Tot_N, mean_sst_ann,  survey_id))
+glimpse(comp_transect_N)
+colSums(is.na(comp_transect_N))
+comp_transect_N = comp_transect_N %>% filter(!is.na(trophic_guild))
+
+# This is the data for the multinomial in wide format
+comp_transect_wide_N =
+  comp_transect_N %>% 
+  group_by_at(vars(-Tot_N)) %>%  # group by everything other than the value column. 
+  mutate(row_id=1:n()) %>% ungroup() %>%  # build group index
+  spread(key=trophic_guild, value=Tot_N) #%>%    # spread
+  # select(-row_id)  # drop the index
+
+
+# Replace missing data with 0's as we are treating these absences as true absences (we assume the surveys with less fish were not biased, that there actually were just less fish able to be sampled that day)
+comp_transect_wide_N[is.na(comp_transect_wide_N)] <- 0
+glimpse(comp_transect_wide_N)
+colSums(is.na(comp_transect_wide_N))
+
+# The model
+fit2_N = multinom(cbind(Herbivore, Piscivore, Planktivore, Invertivore )~mean_sst_ann, data=comp_transect_wide_N)
+summary(fit2_N)
+
+
+
+
+
+# Plot the predictions
+# d.pr3 <- data.frame(latitude=-45:-10)
+d.pr3 <- data.frame(mean_sst_ann=13:30)
+d.pr3 <- cbind(d.pr3,predict(fit2_N,d.pr3,type="probs"))
+
+
+
+
+
+# Tidy multinomial plot
+
+# Get the data into a format suitable for ggplot
+multinomplot_N = gather(d.pr3, trophic_guild, Tot_N, Herbivore:Invertivore, factor_key = T)
+head(multinomplot_N)
+
+
+# Line plots
+# ggplot(multinomplot_N, aes(x = mean_sst_ann, y = Tot_N, colour = trophic_guild)) + 
+#   geom_line() +
+#   labs(y = "Community composition", title = "Relative contribution of Trophic Guilds") +
+#   facet_wrap(~trophic_guild) +
+#   scale_colour_brewer(palette="Spectral")
+# 
+# save(multinomplot_N, file = 'multinomplot_N.Rdat')
+
+
+
+# Filled in plot
+
+tiff("comm_comp_N_plot.tiff", units="in", width=4, height=3, res=300)
+
+ggplot(multinomplot_N, aes(x = mean_sst_ann, y = Tot_N, fill = trophic_guild)) +
+  geom_area(alpha = 9/10,color= "black") +
+  # geom_area() +
+  labs(
+    x = "mean_sst_ann", 
+    y = "Proportion abundance (per transect)",
+    fill = 'Trophic Guild') +
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(expand = c(0, 0)) +
+  # scale_fill_grey(start = 0.8, end = 0.2) +
+  # scale_fill_manual(values = wes_palette("Zissou1", n = 4)) +
+  # scale_fill_manual(values=c("#20B2AA", "#4682B4", "#B0E0E6", "#87CEEB")) +
+  scale_fill_manual(values=c("#18D791","#568AE4", "#0ADADA", "#26C6FF")) +
+  # scale_fill_manual(values = wes_palette("Darjeeling1", n = 4)) +
+  # scale_fill_brewer(palette="PuBu") +
+  # scale_fill_brewer() +
+  theme_classic() +
+  theme(legend.position="none",legend.margin=margin(0,0,0,1),
+        legend.box.margin=margin(-10,1,1,-10),
+        legend.title=element_text(size=14),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+    xlab(expression("Mean SST" ( degree*C))) +
+  theme(axis.text.x = element_text(size=12),
+          axis.text.y = element_text(size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12)
+        )+
+   # guides(colour = guide_legend(title.position="top", title.hjust = 0.5))+
+
+  theme(panel.grid.major = element_line(size = 0.5, linetype = 'solid', colour = "#A9A9A9"),
+        panel.grid.minor = element_line(size = 0.25, linetype = 'solid', colour = "#A9A9A9"),
+        panel.border = element_rect(colour = "black", fill=NA))
+
+dev.off()
+
+```
+
+
+
+#Q3. How much do composition vs. body sizes contribute to mean community size at a given temperature?
+
+```{r}
+
+library(lme4)
+library(lmerTest)
+library(MASS)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(nnet)
+library(colorspace)
+
+# Load the guild specific data, and call it `d` to save on typing.  So you should be able to run this
+# analysis for the different subsets by re-running this markdown but changing the subset that gets 
+# loaded and renamed to `d`. 
+# 
+# There are some records for which the `guild` is recorded as missing. Not sure why guild would be 
+# missing but it without much more information (and work) it is not possible to use these records so
+# we drop them. 
+# 
+# But there are also cases where there is no record at all for a guild in a survey, so for the guild 
+# composition modelling we assume that guild was simply unseen and record its abundance as zero.
+
+
+load("transect_guild_dat.Rdata")
+load("transect_guild_chond.Rdata") 
+load("transect_guild_nochond.Rdata") 
+load("transect_guild_notfished.Rdata")
+
+
+
+# A list of datasets, pick one to run
+dataset = transect_guild_dat
+# dataset = transect_guild_chond
+# dataset = transect_guild_nochond
+# dataset = transect_guild_notfished
+
+  
+# Start analyses
+d <- ungroup(dataset)
+table(d$trophic_guild)
+
+# For the linear mixed model we simply drop the missing guilds. 
+
+glimpse(d)
+
+summary(d$mean_sst_ann)
+hist(d$mean_sst_ann)
+
+
+  
+d.l <- d %>% 
+  filter(!is.na(trophic_guild)) %>%
+  dplyr::select(survey_id,Grid_ID,year,trophic_guild,mean_sst_ann,mean_sizeclass)
+head(d.l)
+
+
+
+
+
+# Fit log size against SST by guild, with random effects for both grid cell and year
+
+fit.s <- lmer(log(mean_sizeclass)~ mean_sst_ann*trophic_guild + (1|Grid_ID) + (1|year),
+              data = d.l)
+summary(fit.s)
+
+
+# The anova table suggests all terms are significant 
+
+anova(fit.s)
+
+# 
+# The residuals from the fit are a little odd - presumably the striations in the top two plots reflect
+# the finite resolution of the measurements.  The boxplots suggest there is slightly more variability 
+# in the residuals for the piscivores - but the effect is not so great to raise a concern.  
+# 
+# The QQ plots are not good, but also not so bad as to raise a concern - particularly in a data set of 
+# this size. There are however three unusual grid locations, and these should at least be examined, and
+# possibly we should re-run the analysis with these sites deleted.
+
+
+
+opar <- par(mfrow=c(3,2))
+plot(residuals(fit.s)~fitted(fit.s),pch=".")
+plot(residuals(fit.s)~d.l$mean_sst_ann,pch=".")
+plot(residuals(fit.s)~factor(d.l$trophic_guild))
+qqnorm(residuals(fit.s),main="Residuals")
+qqnorm(ranef(fit.s)$Grid_ID[,1],main="Grid")
+qqnorm(ranef(fit.s)$year[,1],main="Year")
+par(opar)
+
+
+
+# The three odd grid locations are
+ranef(fit.s)$Grid_ID[order(ranef(fit.s)$Grid_ID[,1])[1:3],,drop=FALSE]
+
+
+# One assumption of this model is that the (log) sizes of different guilds in a survey are independent. 
+# So for example, if the herbivores at a site are unusually large for the temperature (perhaps because 
+# the waters are nutrient rich and that translates into more resources for the herbivores), that does not
+# imply the piscivores will be larger/smaller as a consequence over and above what is already explained 
+# by the temperature, grid cell and year effects. This is quite a strong assumption - we are 
+# modelling a community so it is strange to assume that a change in size of one segment of the 
+# community does not impact the size of another segment. 
+# 
+# To check this assumption we examine the correlation in the residuals from the four guilds across 
+# surveys.  If there is any correlation it is relatively weak.
+
+d.r <- cbind(d.l,resid=residuals(fit.s)) %>% 
+  pivot_wider(id_cols=c(survey_id),names_from=trophic_guild,values_from=resid,values_fill=NA)
+pairs(d.r[,-1],pch=".")
+cor(d.r[,-1],use="pairwise.complete.obs")
+
+
+
+
+
+
+
+
+
+## Composition Model
+
+
+# For the multinomial model, we remove the guilds recorded as missing, but treat absent guilds as zeros
+
+d.w <- d %>% 
+  filter(!is.na(trophic_guild)) %>%
+  pivot_wider(id_cols=c(survey_id,mean_sst_ann),names_from=trophic_guild,values_from=Tot_N,values_fill=0)
+head(d.w)
+
+# Fit the guild composition against SST
+
+fit.p <- multinom(cbind(Herbivore,Invertivore,Piscivore,Planktivore) ~ mean_sst_ann,data=d.w)
+
+summary(fit.p)
+
+
+# The predicted mean composition by temperature
+
+pal <- qualitative_hcl(4, palette = "Dark 3")
+sst <- seq(13,29,0.5)
+pr <- predict(fit.p,newdata=data.frame(mean_sst_ann=sst),type = "prob")
+ys <- t(apply(cbind(0,pr),1,cumsum))
+plot(sst,ys[,5],type="n",ylim=c(0,1),ylab="Fraction",xlab="SST")
+for(k in 1:4)
+  polygon(c(sst,rev(sst)),c(ys[,k+1],rev(ys[,k])),col=pal[k],border=NA)
+legend("top",legend=colnames(pr),fill=pal,ncol=4,inset=c(0,-0.15),xpd=TRUE)
+
+
+
+
+
+
+
+
+## Community Size
+
+# This function uses the mean composition predicted by the multinomial model and the mean (log) size  for each guild predicted by the size model to predicts the community mean size averaged over grid cells and years.  
+# 
+# In addition, the function allows for a temperature offset for the just the composition component or just the size component, so that we can calculate at each sst
+# 
+# * the effect of changing composition on mean size for small temperature change when the within guild  sizes are held constant
+# 
+# * the effect of changing within guild size for a small temperature change when the community composition is held constant
+#   
+# * the effect of changing both composition and within guild size for a small change in temperature. 
+
+
+
+
+
+pred <- function(fit.p,fit.s,sst,off.p=0,off.s=0,n=50) {
+  vcomp <- as.data.frame(VarCorr(fit.s))
+  sigma.r <- sqrt(sum(vcomp[1:2,"vcov"]))
+  sigma.e <- sqrt(vcomp[3,"vcov"])
+  P <- predict(fit.p,newdata=data.frame(mean_sst_ann=sst+off.p),type="probs")
+  logL <- matrix(predict(fit.s,newdata=expand.grid(mean_sst_ann=sst+off.s,trophic_guild=colnames(P)),re.form=~0),ncol=4)
+  re <- expand.grid(r=qnorm(ppoints(n,1/2),0,sigma.r),
+                    e=qnorm(ppoints(n,1/2),0,sigma.e))
+  L <- t(colMeans(exp(outer(re$r,t(logL),FUN="+")+re$e)))
+  C <- rowSums(P*L)
+  list(P=P,L=L,C=C)
+}
+
+
+
+
+
+# Plot the mean size of each guild and the community mean against sst
+
+
+sst <- 13:29.5
+pr <- pred(fit.p,fit.s,sst)
+matplot(sst,cbind(pr$L,pr$C),type="l",lwd=2,lty=c(1,1,1,1,3),col=c(pal,"#111111"),ylab="Size",xlab="SST")
+legend("top",legend=colnames(pr$P),fill=pal,ncol=4,inset=c(0,-0.15),xpd=TRUE)
+
+head(pr)
+
+
+df = data.frame(pr)
+glimpse(df)
+
+df = cbind(df,sst)
+
+
+# Find & Replace Function
+gsr <- function(Source, Search, Replace) { 
+  if (length(Search) != length(Replace))     stop("Search and Replace Must Have Equal Number of Items\n")
+  Changed <- as.character(Source) 
+  for (i in 1:length(Search)) 
+  { 
+    cat("Replacing: ", Search[i], " With: ", Replace[i], "\n")
+    Changed <- replace(Changed, Changed == Search[i], Replace[i])   }
+  cat("\n")   
+  Changed 
+}
+
+
+
+
+
+
+comp_dat = 
+  subset(df,
+         select =c(P.Herbivore,
+                   P.Invertivore,
+                   P.Piscivore,
+                   P.Planktivore,
+                   sst))
+
+
+comp_dat = 
+  comp_dat %>% 
+  pivot_longer(!sst,
+    names_to = "Trophic_guild",
+    values_to = "Proportion",
+  ) 
+
+
+comp_dat = subset(comp_dat, select =c(sst,
+                                      Trophic_guild,
+                                      Proportion))
+
+
+comp_dat$Trophic_guild =
+  gsr(comp_dat$Trophic_guild, 
+      c("P.Herbivore",
+        "P.Invertivore",
+        "P.Piscivore",
+        "P.Planktivore"),
+      c("Herbivore",
+        "Invertivore",
+        "Piscivore",
+        "Planktivore")
+      )
+
+
+length_dat = 
+  subset(df,
+         select =c(L.1,
+                   L.2,
+                   L.3,
+                   L.4,
+                   C,
+                   sst))
+
+
+length_dat = 
+  length_dat %>% 
+  pivot_longer(
+    !sst,
+    names_to = "Trophic_guild",
+    values_to = "Length")
+
+
+
+length_dat$Trophic_guild =
+  gsr(length_dat$Trophic_guild, 
+      c("L.1",
+        "L.2",
+        "L.3",
+        "L.4",
+        "C"),
+      c("Herbivore",
+        "Invertivore",
+        "Piscivore",
+        "Planktivore",
+        "Community")
+      )
+
+
+length_dat$dummy =
+  gsr(length_dat$Trophic_guild, 
+      c("Herbivore",
+        "Invertivore",
+        "Piscivore",
+        "Planktivore",
+        "Community"),
+      c("a",
+        "a",
+        "a",
+        "a",
+        "b")
+      )
+
+
+
+
+
+tiff("mean_size_comm_lines_plot.tiff", units="in", width=4, height=3, res=300)
+# tiff("mean_size_comm_lines_plot UNFISHED.tiff", units="in", width=6, height=4, res=300)
+
+# plot =
+ggplot()+
+  geom_line(data=length_dat,
+            aes(x=sst, y=Length, group = Trophic_guild, colour = Trophic_guild, linetype = dummy), size = 1) +
+  theme_classic() +
+  guides(linetype = "none") +
+    scale_colour_manual(values=c("#FF00FF", "#18D791","#26C6FF","#568AE4", "#0ADADA")) +
+  theme(legend.position="none",legend.margin=margin(0,0,0,1),
+        legend.box.margin=margin(-10,1,1,-10),
+        legend.title=element_text(size=12),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+      ylab("Mean body size (cm)") +
+    xlab(expression("Mean SST " ( degree*C))) +
+   # guides(colour = guide_legend(title.position="top", title.hjust = 0.5))+
+  theme(legend.position="none",legend.margin=margin(0,0,0,1),
+        legend.box.margin=margin(-10,1,1,-10),
+        legend.title=element_text(size=14),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+    xlab(expression("Mean SST" ( degree*C))) +
+  theme(axis.text.x = element_text(size=12),
+          axis.text.y = element_text(size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12)
+        )
+
+
+dev.off()
+
+
+
+
+
+
+# For each temperature (sst), show the change in community mean size for a +/- 1 degree offset in temperature when
+# 
+# * P - only community composition is impacted by the offset
+# * S - only the within guild size is impacted by the offset
+# * P+S - both the composition and within guild size is impacted by the offset
+# 
+# Note we plot the magnitude of the size *decrease*, so this is a little tricky to interpret - it 
+# makes it clearer that within guild size is having a greater impact than composition, and the 
+# decrease is less at higher temperatures, but it is slightly confusing because this is the magnitude 
+# of the decrease in size.
+
+
+
+B <- pred(fit.p,fit.s,sst,off.p=1)$C-pred(fit.p,fit.s,sst,off.p=-1)$C
+A <- pred(fit.p,fit.s,sst,off.s=1)$C-pred(fit.p,fit.s,sst,off.s=-1)$C
+C <- pred(fit.p,fit.s,sst,off.p=1,off.s=1)$C-pred(fit.p,fit.s,sst,off.p=-1,off.s=-1)$C
+
+
+# Why does this not match our prediction from the comm LME model? There we expect ~6.1 cm decrease over this range, here we get ~8.6  
+sum(C[3:11])
+
+
+matplot(sst,cbind(-A,-B,-C),
+        type="l",lty=1,lwd=2,col=pal, 
+        ylab="Size Decrease",xlab="SST")
+legend("top",legend=c("P","S","P+S"),fill=pal,ncol=3,inset=c(0,-0.15),xpd=TRUE)
+
+
+df1 = data.frame(B) 
+df2 = data.frame(A) 
+df3 = data.frame(C) 
+df4 = cbind(df1,df2,df3,sst)
+
+
+
+
+
+
+scen_dat = 
+  df4 %>% 
+  pivot_longer(
+    !sst,
+    names_to = "Scenario",
+    values_to = "Size_decrease")
+
+# Make positive like the above
+scen_dat$Size_decrease = scen_dat$Size_decrease * -1
+summary(scen_dat$Size_decrease)
+
+
+tiff("scenario plots.tiff", units="in", width=4.5, height=, res=300)
+# tiff("scenario plots UNFISHED.tiff", units="in", width=6, height=4, res=300)
+ggplot()+
+  geom_line(data=scen_dat,
+            aes(x=sst, y=Size_decrease, group = Scenario, colour = Scenario), linewidth = 0.75) +
+  theme_classic() +
+   scale_colour_manual(values=c("#FFA179", "#F6D13F","#FF00FF")) +
+    # scale_color_manual(labels = c("T999", "T888"), values = c("blue", "red")) +
+  theme(legend.position="none",legend.margin=margin(0,0,0,1),
+        legend.box.margin=margin(-10,1,1,-10),
+        legend.title=element_text(size=12),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+      ylab("Size decrease (cm) per 1") +
+    xlab(expression("Mean SST" ( degree*C))) +
+  scale_y_continuous(breaks=seq(0,1.4,0.2)) +
+   # guides(colour = guide_legend(title.position="top", title.hjust = 0.5))+
+  theme(legend.position="none",legend.margin=margin(0,0,0,1),
+        legend.box.margin=margin(-10,1,1,-10),
+        legend.title=element_text(size=14),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+    xlab(expression("Mean SST" ( degree*C))) +
+  theme(axis.text.x = element_text(size=12),
+          axis.text.y = element_text(size=12),
+        axis.title.x=element_text(size=12),
+        axis.title.y=element_text(size=12)
+        )
+
+
+dev.off()
+
+
+
+
+scen_prop = df4
+scen_prop[sapply(scen_prop, is.numeric)] <- scen_prop[sapply(scen_prop, is.numeric)] * -1
+
+
+scen_prop$sst = scen_prop$sst * -1
+
+
+scen_prop$size_contr = 
+  scen_prop$A/scen_prop$C
+
+scen_prop$comp_contr = 
+ 1 - scen_prop$size_contr
+
+
+scen_prop = 
+  subset(scen_prop, 
+         select =
+         c ("sst","size_contr", "comp_contr"))
+
+
+scen_prop =
+scen_prop %>% 
+  pivot_longer(
+    !sst,
+    names_to = "Scenario",
+    values_to = "Proportion")
+
+
+# Filled in plot
+p1 <- ggplot(scen_prop, aes(x = sst, y = Proportion, fill = Scenario)) +
+  geom_area(alpha = 8/10) +
+  # geom_area() +
+  ggtitle("") +
+  labs(
+    x = "SST", 
+    y = "Proportion contribution to \ncommunity-level mean size",
+    fill = 'Scenario') +
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(expand = c(0, 0)) +
+  # scale_fill_grey(start = 0.8, end = 0.2) +
+  # scale_fill_manual(values = wes_palette("Zissou1", n = 4)) +
+  scale_fill_manual(
+    labels = c("Within-guild size", "Trophic composition"),
+    values=c("#F6D13F", "#FFA179")) +
+  # scale_fill_manual(values = wes_palette("Darjeeling1", n = 4)) +
+  # scale_fill_brewer(palette="PuBu") +
+  # scale_fill_brewer() +
+  theme_minimal() +
+  theme(plot.margin = unit(c(25, 0, 0, 25), units = "pt")) +
+  theme(legend.position="right",legend.margin=margin(0,0,0,0),
+        legend.box.margin=margin(0,3,0,0), legend.title=element_text(size=10)) +
+  # theme_light() 
+  theme(panel.grid.major = element_line(size = 0.5, linetype = 'solid', colour = "#A9A9A9"),
+        panel.grid.minor = element_line(size = 0.25, linetype = 'solid', colour = "#A9A9A9"))
+
+p1
+
+
+
+
+
+
+
+
+
+
+
+
+# 
+# For each temperature (sst), show the change in community mean size for a +/- 1 degree offset in temperature when
+# 
+# P - only community composition is impacted by the offset
+# S - only the within guild size is impacted by the offset
+# P+S - both the composition and within guild size is impacted by the offset
+# Note we plot the magnitude of the size decrease, so this is a little tricky to interpret - it makes it clearer that within guild size is having a greater impact than composition, and the decrease is less at higher temperatures, but it is slightly confusing because this is the magnitude of the decrease in size.
+
+
+# Each of these three measures of change can be subdivided into contributions form each of the guilds. Again this is slightly confusing because we frame the discussion in terms of the magnitude of the decrease.
+# 
+# When we consider both guild size and community composition, at all temperatures invertivores and piscivores contribute a decrease in community size as temperatures increase (red and blue/green lines always greater than zero (ie positive decrease)), herbivores contribute an increase in community size (purple line is always negative (ie negative decrease=increase)), and planktivores contribute an increase at low temperatures and a decrease at higher temperatures.
+
+
+
+sst <- seq(12,27,0.2)
+dp.l <- pred(fit.p,fit.s,sst,off.p=-1)
+dp.h <- pred(fit.p,fit.s,sst,off.p=1)
+ds.l <- pred(fit.p,fit.s,sst,off.s=-1)
+ds.h <- pred(fit.p,fit.s,sst,off.s=1)
+dps.l <- pred(fit.p,fit.s,sst,off.p=-1,off.s=-1)
+dps.h <- pred(fit.p,fit.s,sst,off.p=1,off.s=1)
+
+
+ys <- dps.l$P*dps.l$L - dps.h$P*dps.h$L
+matplot(sst,cbind(ys,rowSums(ys)),
+        type="l",lwd=2,lty=c(1,1,1,1,3),
+        col=c(pal,"#111111"),ylab="Size Decrease (P+S)",xlab="SST")
+legend("top",legend=colnames(ys),fill=pal,ncol=4,inset=c(0,-0.15),xpd=TRUE)
+
+
+ys = cbind(ys, rowSums(ys))
+ys = cbind(ys, sst)
+ys = as.data.frame(ys)
+names(ys)[5] = "Community"
+
+guild_break_down = 
+ys %>% 
+  pivot_longer(
+    !sst,
+    names_to = "Trophic_guild",
+    values_to = "Size_decrease")
+
+unique(guild_break_down$Trophic_guild)
+
+guild_break_down$dummy =
+  gsr(guild_break_down$Trophic_guild, 
+      c("Herbivore",
+        "Invertivore",
+        "Piscivore",
+        "Planktivore",
+        "Community"),
+      c("a",
+        "a",
+        "a",
+        "a",
+        "b")
+      )
+
+
+tiff("scenario plots guild breakdown.tiff", units="in", width=6, height=4, res=300)
+# plot =
+ggplot()+
+  geom_hline(yintercept = 0, colour = "black") +
+  geom_line(data=guild_break_down,
+            aes(x=sst, y=Size_decrease, group = Trophic_guild, colour = Trophic_guild, linetype = dummy), size = 1) +
+      theme_classic() +
+  guides(linetype = "none") +
+    scale_colour_manual(values=c("#FF00FF", "#18D791", "#26C6FF","#568AE4","#0ADADA")) +
+
+  theme(legend.position="right",legend.margin=margin(0,0,0,1),
+        legend.box.margin=margin(-10,1,1,-10),
+        legend.title=element_text(size=12),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+      ylab("Size decrease (cm)") +
+    xlab(expression("Mean SST " ( degree*C))) +
+   # guides(colour = guide_legend(title.position="top", title.hjust = 0.5))+
+  theme(strip.text.x = element_text(size = 12)) +
+  theme(strip.text.y = element_text(size = 12)) +
+  labs(colour="Trophic guild")
+
+dev.off()
+```
+
+
+
+
+```{r}
+
+dataset = transect_guild_chond
+# dataset = transect_guild_nochond
+# dataset = transect_guild_notfished
+
+  
+# Start analyses
+d <- ungroup(dataset)
+table(d$trophic_guild)
+
+# For the linear mixed model we simply drop the missing guilds. 
+
+glimpse(d)
+
+
+  
+d.l <- d %>% 
+  filter(!is.na(trophic_guild)) %>%
+  dplyr::select(survey_id,Grid_ID,year,trophic_guild,mean_sst_ann,mean_sizeclass)
+head(d.l)
+
+# Fit log size against SST by guild, with random effects for both grid cell and year
+
+fit.s <- lmer(log(mean_sizeclass)~ mean_sst_ann*trophic_guild + (1|Grid_ID) + (1|year),
+              data = d.l)
+summary(fit.s)
+
+
+# The anova table suggests all terms are significant 
+anova(fit.s)
+
+
+opar <- par(mfrow=c(3,2))
+plot(residuals(fit.s)~fitted(fit.s),pch=".")
+plot(residuals(fit.s)~d.l$mean_sst_ann,pch=".")
+plot(residuals(fit.s)~factor(d.l$trophic_guild))
+qqnorm(residuals(fit.s),main="Residuals")
+qqnorm(ranef(fit.s)$Grid_ID[,1],main="Grid")
+qqnorm(ranef(fit.s)$year[,1],main="Year")
+par(opar)
+
+
+
+# The three odd grid locations are
+ranef(fit.s)$Grid_ID[order(ranef(fit.s)$Grid_ID[,1])[1:3],,drop=FALSE]
+
+
+d.r <- cbind(d.l,resid=residuals(fit.s)) %>% 
+  pivot_wider(id_cols=c(survey_id),names_from=trophic_guild,values_from=resid,values_fill=NA)
+pairs(d.r[,-1],pch=".")
+cor(d.r[,-1],use="pairwise.complete.obs")
+
+
+
+# Composition Model
+
+
+# For the multinomial model, we remove the guilds recorded as missing, but treat absent guilds as zeros
+
+d.w <- d %>% 
+  filter(!is.na(trophic_guild)) %>%
+  pivot_wider(id_cols=c(survey_id,mean_sst_ann),names_from=trophic_guild,values_from=Tot_N,values_fill=0)
+head(d.w)
+
+# Fit the guild composition against SST
+
+# fit.p <- multinom(cbind(Herbivore,Invertivore,Piscivore,Planktivore) ~ mean_sst_ann,data=d.w)
+fit.p <- multinom(cbind(Invertivore,Piscivore,Planktivore) ~ mean_sst_ann,data=d.w)
+summary(fit.p)
+
+
+# The predicted mean composition by temperature
+pal <- qualitative_hcl(3, palette = "Cold", rev = T)
+sst <- seq(11,29,0.5)
+pr <- predict(fit.p,newdata=data.frame(mean_sst_ann=sst),type = "prob")
+ys <- t(apply(cbind(0,pr),1,cumsum))
+plot(sst,ys[,4],type="n",ylim=c(0,1),ylab="Fraction",xlab="SST")
+for(k in 1:3)
+  polygon(c(sst,rev(sst)),c(ys[,k+1],rev(ys[,k])),col=pal[k],border=NA)
+legend("top",legend=colnames(pr),fill=pal,ncol=3,inset=c(0,-0.15),xpd=TRUE)
+
+
+
+
+```
+
+
