@@ -7,8 +7,8 @@ Amy Rose Coghlan1*; Julia L. Blanchard1,2; Simon Wotherspoon3; Rick D. Stuart-Sm
 1Institute for Marine and Antarctic Studies (IMAS), University of Tasmania, Hobart, Australia, 7001.
 2 Centre for Marine Socioecology, University of Tasmania, Hobart, Australia
 3Australian Antarctic Division, Tasmania, Australia
-*Corresponding author (email: amy.coghlan@utas.edu.au), IMAS – 20 Castray Esplanade, Battery Point, Tasmania 7004, Australia
-* corresponding author amy.coghlan@utas.edu.au 
+
+* *Corresponding author amy.coghlan@utas.edu.au 
 
 
 Submitted to Nature Ecology and Evolution June 2023.
